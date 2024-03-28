@@ -23,34 +23,10 @@
 
 package org.lamsfoundation.lams.tool.assessment.service;
 
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidParameterException;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.beanutils.PropertyUtils;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
@@ -143,10 +119,33 @@ import org.lamsfoundation.lams.util.excel.ExcelSheet;
 import org.lamsfoundation.lams.util.hibernate.HibernateSessionManager;
 import org.springframework.web.util.UriUtils;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidParameterException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * @author Andrey Balan
@@ -2312,13 +2311,22 @@ public class AssessmentServiceImpl
 				|| QbQuestion.TYPE_TRUE_FALSE == question.getType();
 			if (addAnsweredDateColumn) {
 			    // only put interaction time into sheet if auto submit picked up answer
-			    LearnerInteractionEvent interaction = assessmentCell.value == null
-				    ? null
-				    : learnerInteractions.get(questionResult.getQbToolQuestion().getUid());
-			    if (interaction == null) {
+			    if (assessmentCell.value == null) {
 				userResultRow.addEmptyCell();
 			    } else {
-				userResultRow.addCell(interaction.getFormattedDate());
+				LearnerInteractionEvent interaction = learnerInteractions.get(
+					questionResult.getQbToolQuestion().getUid());
+				if (interaction == null) {
+				    Date date = questionResult.getFinishDate();
+				    if (date == null) {
+					userResultRow.addEmptyCell();
+				    } else {
+					userResultRow.addCell(
+						FileUtil.EXPORT_TO_SPREADSHEET_TITLE_DATE_FORMAT.format(date));
+				    }
+				} else {
+				    userResultRow.addCell(interaction.getFormattedDate());
+				}
 			    }
 			}
 
