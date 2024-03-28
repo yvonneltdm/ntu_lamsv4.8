@@ -863,7 +863,7 @@ public class AssessmentServiceImpl
 		    .append(" \"").append(assessmentResult.getUser().getLoginName()).append("\" for question ")
 		    .append(questionDto.getUid()).append(" for question result ").append(questionResult.getUid())
 		    .append(" answer was \"").append(questionResult.getAnswer())
-		    .append("\" and it is now blank, skipping save.");
+		    .append("\" and it is now blank, skipping save to DB.");
 	    log.warn(autosaveLogBuilder);
 	    if (logAutosave.isTraceEnabled()) {
 		logAutosave.trace(autosaveLogBuilder);
@@ -2111,11 +2111,24 @@ public class AssessmentServiceImpl
 	if (sessionDtos != null && assessment.getQuestionReferences() != null) {
 	    // if there are multiple session, then the activity has to be grouped
 	    boolean isActivityGrouped = sessionDtos.size() > 1;
+	    int questionLeftPadding = isActivityGrouped ? 3 : 2;
+
+	    List<AssessmentSection> sections =
+		    assessment.getQuestionsPerPage() == -1 ? new ArrayList<>(assessment.getSections()) : null;
+	    ExcelRow sectionRow = null;
+	    if (sections != null) {
+		sectionRow = userSummarySheet.initRow();
+		sectionRow.addEmptyCells(questionLeftPadding);
+		sectionRow.addCell(getMessage("label.authoring.advance.sections"), false,
+			ExcelCell.BORDER_STYLE_LEFT_THIN);
+		sectionRow = userSummarySheet.initRow();
+		sectionRow.addEmptyCells(questionLeftPadding);
+	    }
 
 	    // Row with just "Questions" header
 	    ExcelRow userSummaryTitle = userSummarySheet.initRow();
 	    // if there is no grouping, then we skip "Group" column
-	    int questionLeftPadding = isActivityGrouped ? 3 : 2;
+
 	    userSummaryTitle.addEmptyCells(questionLeftPadding);
 	    userSummaryTitle.addCell(getMessage("label.export.questions"), true, ExcelCell.BORDER_STYLE_LEFT_THIN);
 
@@ -2127,8 +2140,37 @@ public class AssessmentServiceImpl
 	    questionReferences.addAll(assessment.getQuestionReferences());
 
 	    int questionCounter = 1;
+	    int sectionCounter = 0;
+	    AssessmentSection currentSection = sections == null ? null : sections.get(sectionCounter);
+	    int sectionQuestionCounter = 0;
+	    Set<Integer> sectionBreaks = new HashSet<>();
+
 	    // print out all question titles
 	    for (QuestionReference questionReference : questionReferences) {
+		if (sections != null) {
+		    int currentSectionQuestionCount = currentSection.getQuestionCount();
+		    if (currentSection != null && currentSectionQuestionCount != 0
+			    && questionCounter - sectionQuestionCounter > currentSectionQuestionCount) {
+			sectionBreaks.add(questionCounter - 1);
+
+			sectionRow.addEmptyCell();
+			questionTitlesRow.addEmptyCell();
+			questionLeftPadding++;
+
+			sectionQuestionCounter += currentSectionQuestionCount;
+			sectionCounter++;
+			currentSection = sectionCounter < sections.size() ? sections.get(sectionCounter) : null;
+		    }
+		    if (currentSection != null) {
+			String sectionName = currentSection.getName();
+			if (StringUtils.isBlank(sectionName)) {
+			    sectionName = getMessage("label.learning.section.default.name",
+				    new Object[] { sectionCounter + 1 });
+			}
+			sectionRow.addCell(sectionName, false, ExcelCell.BORDER_STYLE_LEFT_THIN);
+		    }
+		}
+
 		AssessmentQuestion question = questionReference.getQuestion();
 		String title = question.getQbQuestion().getName();
 		// leave pure text of title
@@ -2158,7 +2200,13 @@ public class AssessmentServiceImpl
 		    columnShift++;
 		}
 		questionTitlesRow.addEmptyCells(columnShift);
+		if (sections != null) {
+		    sectionRow.addEmptyCells(columnShift);
+		}
 		userSummarySheet.addMergedCells(5, questionLeftPadding, questionLeftPadding + columnShift);
+		if (sections != null) {
+		    userSummarySheet.addMergedCells(7, questionLeftPadding, questionLeftPadding + columnShift);
+		}
 
 		questionLeftPadding += columnShift + 1;
 	    }
@@ -2172,6 +2220,7 @@ public class AssessmentServiceImpl
 	    userSummaryUserHeadersRow.addCell(getMessage("label.export.user.id"), true);
 	    userSummaryUserHeadersRow.addCell(getMessage("label.monitoring.user.summary.full.name"), true);
 
+	    questionCounter = 1;
 	    for (QuestionReference questionReference : questionReferences) {
 		userSummaryUserHeadersRow.addCell(getMessage("label.export.mark"), ExcelCell.BORDER_STYLE_LEFT_THIN);
 		userSummaryUserHeadersRow.addCell(getMessage("label.authoring.basic.option.answer"));
@@ -2190,6 +2239,11 @@ public class AssessmentServiceImpl
 		    userSummaryUserHeadersRow.addCell(getMessage("label.confidence"));
 		}
 
+		if (sections != null && (questionCounter == questionReferences.size() || sectionBreaks.contains(
+			questionCounter))) {
+		    userSummaryUserHeadersRow.addCell(getMessage("label.export.section.mark"), true);
+		}
+		questionCounter++;
 	    }
 
 	    // a single column at the end of previous headers
@@ -2229,12 +2283,15 @@ public class AssessmentServiceImpl
 		    Map<Long, LearnerInteractionEvent> learnerInteractions = learnerInteractionService.getFirstLearnerInteractions(
 			    assessment.getContentId(), assessmentUser.getUserId().intValue());
 
+		    questionCounter = 1;
+		    float sectionMark = 0;
 		    // follow question reference ordering, to QbToolQuestion's
 		    for (QuestionReference questionReference : questionReferences) {
 			AssessmentQuestionResult questionResult = questionResultsMap.get(
 				questionReference.getQuestion().getUid());
 			// mark
 			userResultRow.addCell(questionResult.getMark(), ExcelCell.BORDER_STYLE_LEFT_THIN);
+			sectionMark += questionResult.getMark();
 
 			// option chosen or full answer
 			AssessmentExcelCell assessmentCell = AssessmentEscapeUtils.addResponseCellForExcelExport(
@@ -2287,6 +2344,12 @@ public class AssessmentServiceImpl
 
 			    userResultRow.addCell(confidenceLevel);
 			}
+			if (sections != null && (questionCounter == questionReferences.size() || sectionBreaks.contains(
+				questionCounter))) {
+			    userResultRow.addCell(sectionMark);
+			    sectionMark = 0;
+			}
+			questionCounter++;
 		    }
 		    userResultRow.addCell(assessmentResult.getGrade(), ExcelCell.BORDER_STYLE_LEFT_THIN);
 		}
@@ -2556,44 +2619,47 @@ public class AssessmentServiceImpl
 	    for (AssessmentQuestion newQuestion : newQuestions) {
 		if (oldQuestion.getDisplayOrder() == newQuestion.getDisplayOrder()) {
 
-		    boolean isQuestionModified = false;
+		    boolean isQuestionModified = !oldQuestion.getQbQuestion().getUid()
+			    .equals(newQuestion.getQbQuestion().getUid());
+		    if (!isQuestionModified) {
 
-		    // title or question is different - do nothing. Also question grade can't be changed
+			// title or question is different - do nothing. Also question grade can't be changed
 
-		    //QbQuestion.TYPE_TRUE_FALSE
-		    if (oldQuestion.getQbQuestion().getCorrectAnswer() != newQuestion.getQbQuestion()
-			    .getCorrectAnswer()) {
-			isQuestionModified = true;
-		    }
+			//QbQuestion.TYPE_TRUE_FALSE
+			if (oldQuestion.getQbQuestion().getCorrectAnswer() != newQuestion.getQbQuestion()
+				.getCorrectAnswer()) {
+			    isQuestionModified = true;
+			}
 
-		    // options are different
-		    List<QbOption> oldOptions = oldQuestion.getQbQuestion().getQbOptions();
-		    List<QbOption> newOptions = newQuestion.getQbQuestion().getQbOptions();
-		    for (QbOption oldOption : oldOptions) {
-			for (QbOption newOption : newOptions) {
-			    if (oldOption.getDisplayOrder() == newOption.getDisplayOrder()) {
+			// options are different
+			List<QbOption> oldOptions = oldQuestion.getQbQuestion().getQbOptions();
+			List<QbOption> newOptions = newQuestion.getQbQuestion().getQbOptions();
+			for (QbOption oldOption : oldOptions) {
+			    for (QbOption newOption : newOptions) {
+				if (oldOption.getDisplayOrder() == newOption.getDisplayOrder()) {
 
-				//short answer
-				if (((oldQuestion.getType() == QbQuestion.TYPE_VERY_SHORT_ANSWERS)
-					&& !StringUtils.equals(oldOption.getName(), newOption.getName()))
-					//numbering
-					|| (oldOption.getNumericalOption() != newOption.getNumericalOption()) || (
-					oldOption.getAcceptedError() != newOption.getAcceptedError())
-					//option grade
-					|| (oldOption.getMaxMark() != newOption.getMaxMark())
-					//changed correct option
-					|| (oldOption.isCorrect() != newOption.isCorrect())) {
-				    isQuestionModified = true;
-				    break;
+				    //short answer
+				    if (((oldQuestion.getType() == QbQuestion.TYPE_VERY_SHORT_ANSWERS)
+					    && !StringUtils.equals(oldOption.getName(), newOption.getName()))
+					    //numbering
+					    || (oldOption.getNumericalOption() != newOption.getNumericalOption()) || (
+					    oldOption.getAcceptedError() != newOption.getAcceptedError())
+					    //option grade
+					    || (oldOption.getMaxMark() != newOption.getMaxMark())
+					    //changed correct option
+					    || (oldOption.isCorrect() != newOption.isCorrect())) {
+					isQuestionModified = true;
+					break;
+				    }
 				}
 			    }
+			    if (isQuestionModified) {
+				break;
+			    }
 			}
-			if (isQuestionModified) {
-			    break;
+			if (oldOptions.size() != newOptions.size()) {
+			    isQuestionModified = true;
 			}
-		    }
-		    if (oldOptions.size() != newOptions.size()) {
-			isQuestionModified = true;
 		    }
 
 		    if (isQuestionModified) {

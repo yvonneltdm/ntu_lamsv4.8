@@ -115,6 +115,7 @@ import java.util.stream.Collectors;
 public class LearningController {
 
     private static Logger log = Logger.getLogger(LearningController.class);
+    private static Logger logAutosave = Logger.getLogger(AssessmentServiceImpl.class.getName() + "_autosave");
 
     @Autowired
     @Qualifier("laasseAssessmentService")
@@ -294,7 +295,7 @@ public class LearningController {
 
 	//user is allowed to answer questions if assessment activity doesn't have leaders or he is the leader
 	boolean hasEditRight =
-		(!assessment.isUseSelectLeaderToolOuput() || assessment.isUseSelectLeaderToolOuput() && isUserLeader) && !mode.isTeacher();
+		!assessment.isUseSelectLeaderToolOuput() || assessment.isUseSelectLeaderToolOuput() && isUserLeader;
 
 	//showResults if user has finished the last result
 	boolean showResults = (lastResult != null) && (lastResult.getFinishDate() != null);
@@ -467,6 +468,7 @@ public class LearningController {
     @PostMapping("/nextPage")
     public String nextPage(HttpServletRequest request)
 	    throws ServletException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+//	printIncomingParameters(request);
 	return nextPage(request, false, -1);
     }
 
@@ -694,6 +696,8 @@ public class LearningController {
     @ResponseBody
     public String autoSaveAnswers(HttpServletRequest request, HttpServletResponse response)
 	    throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, IOException {
+//	printIncomingParameters(request);
+
 	SessionMap<String, Object> sessionMap = getSessionMap(request);
 	if (sessionMap == null) {
 	    log.warn("No sessionMap found in session for user: " + request.getRemoteUser());
@@ -821,6 +825,28 @@ public class LearningController {
 
 	    } else if (questionType == QbQuestion.TYPE_ESSAY) {
 		String answer = request.getParameter(AssessmentConstants.ATTR_QUESTION_PREFIX + i);
+
+		boolean isAnswerNowBlank =
+			StringUtils.isNotBlank(questionDto.getAnswer()) && StringUtils.isBlank(answer);
+
+		if (logAutosave.isTraceEnabled()) {
+		    AssessmentUser learner = (AssessmentUser) sessionMap.get(AssessmentConstants.ATTR_USER);
+		    if (learner != null) {
+			StringBuilder logBuilder = new StringBuilder("For learner ").append(learner.getUid())
+				.append(" \"").append(learner.getLoginName()).append("\" for essay question ")
+				.append(questionUid).append(" the answer was \"").append(questionDto.getAnswer());
+			if (isAnswerNowBlank) {
+			    logBuilder.append("\" and now it is blank, skipping save to session.");
+			} else {
+			    logBuilder.append("\" and now it is \"").append(answer).append("\"");
+			}
+			logAutosave.trace(logBuilder.toString());
+		    }
+		}
+		if (isAnswerNowBlank) {
+		    continue;
+		}
+
 		if (questionDto.getCodeStyle() == null) {
 		    answer = answer.replaceAll("[\n\r\f]", "");
 		} else {
@@ -1347,4 +1373,21 @@ public class LearningController {
 	request.setAttribute(AssessmentConstants.ATTR_SESSION_MAP_ID, sessionMapID);
 	return (SessionMap<String, Object>) request.getSession().getAttribute(sessionMapID);
     }
+
+//    private void printIncomingParameters(HttpServletRequest request) {
+//	if (!logAutosave.isTraceEnabled()) {
+//	    return;
+//	}
+//	StringBuilder logBuilder = new StringBuilder("Incoming parameters for autosave/next page\n");
+//	Enumeration<String> parameterNames = request.getParameterNames();
+//	while (parameterNames.hasMoreElements()) {
+//	    String paramName = parameterNames.nextElement();
+//	    String[] paramValues = request.getParameterValues(paramName);
+//	    for (int i = 0; i < paramValues.length; i++) {
+//		String paramValue = paramValues[i];
+//		logBuilder.append(paramName).append(" = ").append(paramValue).append('\n');
+//	    }
+//	}
+//	logAutosave.trace(logBuilder.toString());
+//    }
 }

@@ -3,6 +3,7 @@
 <%@ page import="org.lamsfoundation.lams.tool.scratchie.ScratchieConstants"%>
 <c:set var="sessionMap" value="${sessionScope[sessionMapID]}" />
 <c:if test="${mode == null}"><c:set var="mode" value="${sessionMap.mode}" /></c:if>
+<c:set var="isAuthoringRestricted" value="${mode == 'teacher'}" />
 
 <lams:html>
 	<lams:head>
@@ -77,7 +78,8 @@
 					$('#relativeTimeLimit').val(0);
 				}
 
-				$('#syncRatQuestions').val(hasMatchingRatActivity && questionsEdited &&
+			let isAuthoringRestricted = ${isAuthoringRestricted};
+			$('#syncRatQuestions').val(!isAuthoringRestricted && hasMatchingRatActivity && questionsEdited &&
 						confirm("<spring:escapeBody javaScriptEscape='true'><fmt:message key='message.authoring.rat.questions.sync'/></spring:escapeBody>"));
 
 				return true;
@@ -119,7 +121,7 @@
 				</lams:TabBodys>
 
 				<!-- Button Row -->
-				<%--  Default value 
+				<%--  Default value
 					cancelButtonLabelKey="label.authoring.cancel.button"
 					saveButtonLabelKey="label.authoring.save.button"
 					cancelConfirmMsgKey="authoring.msg.cancel.save"
