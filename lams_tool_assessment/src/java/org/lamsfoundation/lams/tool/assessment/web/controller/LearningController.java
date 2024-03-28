@@ -57,6 +57,7 @@ import org.lamsfoundation.lams.tool.assessment.model.AssessmentSession;
 import org.lamsfoundation.lams.tool.assessment.model.AssessmentUser;
 import org.lamsfoundation.lams.tool.assessment.model.QuestionReference;
 import org.lamsfoundation.lams.tool.assessment.service.AssessmentApplicationException;
+import org.lamsfoundation.lams.tool.assessment.service.AssessmentServiceImpl;
 import org.lamsfoundation.lams.tool.assessment.service.IAssessmentService;
 import org.lamsfoundation.lams.tool.assessment.util.AssessmentSessionComparator;
 import org.lamsfoundation.lams.tool.assessment.util.SequencableComparator;
@@ -78,6 +79,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -118,6 +120,7 @@ import java.util.stream.Collectors;
 public class LearningController {
 
     private static Logger log = Logger.getLogger(LearningController.class);
+    private static Logger logAutosave = Logger.getLogger(AssessmentServiceImpl.class.getName() + "_autosave");
 
     @Autowired
     @Qualifier("laasseAssessmentService")
@@ -480,9 +483,10 @@ public class LearningController {
     /**
      * Shows next page. It's available only to leaders as non-leaders see all questions on one page.
      */
-    @RequestMapping("/nextPage")
+    @PostMapping("/nextPage")
     public String nextPage(HttpServletRequest request)
 	    throws ServletException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+//	printIncomingParameters(request);
 	return nextPage(request, false, -1);
     }
 
@@ -602,7 +606,7 @@ public class LearningController {
      * @throws IllegalAccessException
      */
     @SuppressWarnings("unchecked")
-    @RequestMapping("/submitAll")
+    @PostMapping("/submitAll")
     public String submitAll(HttpServletRequest request)
 	    throws ServletException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
 	SessionMap<String, Object> sessionMap = getSessionMap(request);
@@ -714,11 +718,13 @@ public class LearningController {
      *
      * @throws IOException
      */
-    @RequestMapping("/autoSaveAnswers")
+    @PostMapping("/autoSaveAnswers")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
     public String autoSaveAnswers(HttpServletRequest request, HttpServletResponse response)
 	    throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, IOException {
+//	printIncomingParameters(request);
+
 	SessionMap<String, Object> sessionMap = getSessionMap(request);
 	if (sessionMap == null) {
 	    log.warn("No sessionMap found in session for user: " + request.getRemoteUser());
@@ -899,6 +905,28 @@ public class LearningController {
 
 	    } else if (questionType == QbQuestion.TYPE_ESSAY) {
 		String answer = request.getParameter(AssessmentConstants.ATTR_QUESTION_PREFIX + i);
+
+		boolean isAnswerNowBlank =
+			StringUtils.isNotBlank(questionDto.getAnswer()) && StringUtils.isBlank(answer);
+
+		if (logAutosave.isTraceEnabled()) {
+		    AssessmentUser learner = (AssessmentUser) sessionMap.get(AssessmentConstants.ATTR_USER);
+		    if (learner != null) {
+			StringBuilder logBuilder = new StringBuilder("For learner ").append(learner.getUid())
+				.append(" \"").append(learner.getLoginName()).append("\" for essay question ")
+				.append(questionUid).append(" the answer was \"").append(questionDto.getAnswer());
+			if (isAnswerNowBlank) {
+			    logBuilder.append("\" and now it is blank, skipping save to session.");
+			} else {
+			    logBuilder.append("\" and now it is \"").append(answer).append("\"");
+			}
+			logAutosave.trace(logBuilder.toString());
+		    }
+		}
+		if (isAnswerNowBlank) {
+		    continue;
+		}
+
 		if (questionDto.getCodeStyle() == null) {
 		    answer = answer.replaceAll("[\n\r\f]", "");
 		} else {
@@ -1424,4 +1452,21 @@ public class LearningController {
 	request.setAttribute(AssessmentConstants.ATTR_SESSION_MAP_ID, sessionMapID);
 	return (SessionMap<String, Object>) request.getSession().getAttribute(sessionMapID);
     }
+
+//    private void printIncomingParameters(HttpServletRequest request) {
+//	if (!logAutosave.isTraceEnabled()) {
+//	    return;
+//	}
+//	StringBuilder logBuilder = new StringBuilder("Incoming parameters for autosave/next page\n");
+//	Enumeration<String> parameterNames = request.getParameterNames();
+//	while (parameterNames.hasMoreElements()) {
+//	    String paramName = parameterNames.nextElement();
+//	    String[] paramValues = request.getParameterValues(paramName);
+//	    for (int i = 0; i < paramValues.length; i++) {
+//		String paramValue = paramValues[i];
+//		logBuilder.append(paramName).append(" = ").append(paramValue).append('\n');
+//	    }
+//	}
+//	logAutosave.trace(logBuilder.toString());
+//    }
 }
