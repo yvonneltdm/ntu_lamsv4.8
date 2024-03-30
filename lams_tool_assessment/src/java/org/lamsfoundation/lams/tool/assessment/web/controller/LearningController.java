@@ -55,6 +55,7 @@ import org.lamsfoundation.lams.tool.assessment.model.AssessmentSection;
 import org.lamsfoundation.lams.tool.assessment.model.AssessmentSession;
 import org.lamsfoundation.lams.tool.assessment.model.AssessmentUser;
 import org.lamsfoundation.lams.tool.assessment.model.QuestionReference;
+import org.lamsfoundation.lams.tool.assessment.service.AssessmentServiceImpl;
 import org.lamsfoundation.lams.tool.assessment.service.IAssessmentService;
 import org.lamsfoundation.lams.tool.assessment.util.AssessmentSessionComparator;
 import org.lamsfoundation.lams.tool.assessment.util.SequencableComparator;
