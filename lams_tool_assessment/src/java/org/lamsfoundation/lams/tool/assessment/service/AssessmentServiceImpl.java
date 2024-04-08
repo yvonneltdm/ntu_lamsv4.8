@@ -1672,11 +1672,23 @@ public class AssessmentServiceImpl
 
 	    sessionIdToUsersMap.put(sessionId, users);
 	}
-	Set<QuestionReference> questionReferences = new TreeSet<>(new SequencableComparator());
-	questionReferences.addAll(assessment.getQuestionReferences());
 
-	for (QuestionReference questionReference : questionReferences) {
-	    AssessmentQuestion question = questionReference.getQuestion();
+	Set<QuestionReference> questionReferences = new TreeSet<>(new SequencableComparator());
+	boolean hasRandomQuestion = false;
+	for (QuestionReference reference : questionReferences) {
+	    hasRandomQuestion |= reference.isRandomQuestion();
+	    if (hasRandomQuestion) {
+		break;
+	    }
+	    questionReferences.add(reference);
+	}
+	// if there is at least one random question, we need to show all questions
+	Collection<AssessmentQuestion> questions = hasRandomQuestion
+		? assessment.getQuestions()
+		: questionReferences.stream()
+			.collect(Collectors.mapping(QuestionReference::getQuestion, Collectors.toList()));
+
+	for (AssessmentQuestion question : questions) {
 	    Long questionUid = question.getUid();
 	    QuestionSummary questionSummary = new QuestionSummary(question);
 
