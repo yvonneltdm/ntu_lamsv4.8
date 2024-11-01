@@ -154,6 +154,14 @@
 		<ant antfile="../lams_contentrepository/build.xml" target="_build-jar"     inheritAll="false" />
 		<ant antfile="../lams_central/build.xml"           target="_build-product" inheritAll="false" />
 		<ant antfile="../lams_learning/build.xml"          target="_build-product" inheritAll="false" />
+		
+		<!-- Start NTU customisation: Workaround to ensure libraries are available for lams_monitoring -->
+		<ant antfile="../lams_tool_assessment/build.xml"    target="deploy-tool" inheritAll="false" />
+		<ant antfile="../lams_tool_lamc/build.xml"          target="deploy-tool" inheritAll="false" />
+		<ant antfile="../lams_tool_scratchie/build.xml"     target="deploy-tool" inheritAll="false" />
+		<!-- End NTU customisation -->
+		
+		
 		<ant antfile="../lams_monitoring/build.xml"        target="_build-product" inheritAll="false" />
 		<ant antfile="../lams_admin/build.xml"             target="_build-product" inheritAll="false" />
 		<ant antfile="../lams_www/build.xml"               target="_clean-dirs"     inheritAll="false" />
@@ -1047,5 +1055,9 @@
 			</fileset>
 			<fileset dir="${server.home}/docs/" />
 		</delete>
+	</target>
+	
+	<target name="clean">
+	    <delete dir="build"/>
 	</target>
 </project>

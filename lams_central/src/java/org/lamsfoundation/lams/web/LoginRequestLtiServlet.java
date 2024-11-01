@@ -16,9 +16,11 @@
  */
 package org.lamsfoundation.lams.web;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.Enumeration;
+import java.util.stream.Collectors;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -42,6 +44,7 @@ import org.lamsfoundation.lams.integration.util.LtiUtils;
 import org.lamsfoundation.lams.lesson.service.ILessonService;
 import org.lamsfoundation.lams.usermanagement.service.IUserManagementService;
 import org.lamsfoundation.lams.util.CentralConstants;
+import org.lamsfoundation.lams.util.FileUtil;
 import org.lamsfoundation.lams.util.HashUtil;
 import org.lamsfoundation.lams.util.WebUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +69,7 @@ public class LoginRequestLtiServlet extends HttpServlet {
 
     private final String DEFAULT_FIRST_NAME = "John";
     private final String DEFAULT_LAST_NAME = "Doe";
+    private final String DEFAULT_CONSUMER_KEY = "9de81f61-e4f2-42cf-b7a2-34cd69479ecd";
 
     /*
      * Request Spring to lookup the applicationContext tied to the current ServletContext and inject service beans
@@ -76,13 +80,59 @@ public class LoginRequestLtiServlet extends HttpServlet {
 	super.init(config);
 	SpringBeanAutowiringSupport.processInjectionBasedOnServletContext(this, config.getServletContext());
     }
+    
+    public static String getRequestAsString(HttpServletRequest request) {
+        StringBuilder result = new StringBuilder();
+
+        // Headers
+        result.append("Headers:\n");
+        Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String headerName = headerNames.nextElement();
+            String headerValue = request.getHeader(headerName);
+            result.append(headerName).append(": ").append(headerValue).append("\n");
+        }
+
+        // Parameters
+        result.append("Parameters:\n");
+        request.getParameterMap().forEach((key, values) -> {
+            result.append(key).append(": ");
+            for (String value : values) {
+                result.append(value).append(" ");
+            }
+            result.append("\n");
+        });
+
+        // Body
+        result.append("Body:\n");
+        try (BufferedReader reader = request.getReader()) {
+            result.append(reader.lines().collect(Collectors.joining(System.lineSeparator())));
+        } catch (IOException e) {
+            result.append("Error reading body: ").append(e.getMessage());
+        }
+
+        return result.toString();
+    }
 
     @Override
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-	String consumerKey = request.getParameter(LtiUtils.OAUTH_CONSUMER_KEY);
+	
+    String requestAsString = getRequestAsString(request);
+    System.out.println(">>> request: " + requestAsString);  // Print to console
+    response.getWriter().write("Request printed to console.");
+    	
+    String consumerKey = request.getParameter(LtiUtils.OAUTH_CONSUMER_KEY);
+	
+	System.out.println(">>> consumerKey: " + consumerKey);
+	if (StringUtils.isBlank(consumerKey)) {
+		consumerKey = DEFAULT_CONSUMER_KEY;
+		System.out.println(">>> default consumerKey: " + consumerKey);
+	 }
 	ExtServer extServer = integrationService.getExtServer(consumerKey);
+	System.out.println(">>> UserIdParameterName: " + extServer.getUserIdParameterName());
 	//get user id as "user_id" parameter, or as lis_person_sourcedid (if according option is ON for this LTI server)
 	String extUsername = request.getParameter(extServer.getUserIdParameterName());
+	System.out.println(">>> extUsername: " + extUsername);
 	String roles = request.getParameter(BasicLTIConstants.ROLES);
 
 	// implicit login params

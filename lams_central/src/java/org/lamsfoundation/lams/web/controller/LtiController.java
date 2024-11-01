@@ -206,6 +206,7 @@ public class LtiController {
 	String resourceLinkTitle = request.getParameter(BasicLTIConstants.RESOURCE_LINK_TITLE);
 	String resourceLinkDescription = request.getParameter(BasicLTIConstants.RESOURCE_LINK_DESCRIPTION);
 
+	System.out.println(">>> consumerKey: " + consumerKey);
 	ExtServer extServer = integrationService.getExtServer(consumerKey);
 	ExtCourseClassMap extCourse = integrationService.getExtCourseClassMap(extServer.getSid(), contextId);
 	Integer organisationId = extCourse.getOrganisation().getOrganisationId();

@@ -21,7 +21,13 @@
 		<fileset dir="../../lams/lams_build/lib">
 			<include name="**/*.jar" />
 		</fileset>
-		<fileset file="../../lams/lams_common/build/lib/lams.jar" />
+		<fileset file="../../lams/lams_common/build/lib/lams.jar" />		
+
+		<!--  KNGOH Added to enable successful lams_monitoring building  -->
+		<fileset file="../../lams/lams_tool_assessment/build/lib/lams-tool-laasse10.jar" />
+		<fileset file="../../lams/lams_tool_lamc/build/lib/lams-tool-lamc11.jar" />
+		<fileset file="../../lams/lams_tool_scratchie/build/lib/lams-tool-lascrt11.jar" />
+		
 		<!-- Same list as in projects' .classpath file references to WildFly modules.
 			 They need to be exactly listed as **/*.jar would load other versions of JARs
 			 that are also present in lams_build/lib.
@@ -56,12 +62,9 @@
 			<include name="org/jboss/dmr/main/jboss-dmr-*.jar" />
 			<include name="com/fasterxml/jackson/core/jackson-core/main/jackson-core-*.jar" />
 			<include name="com/fasterxml/jackson/core/jackson-databind/main/jackson-databind-*.jar" />
-			<include name="com/fasterxml/jackson/core/jackson-annotations/main/jackson-annotations-*.jar" />
 			<include name="javax/activation/api/main/activation-*.jar" />
 			<include name="javax/persistence/api/main/javax.persistence-api-*.jar" />
 			<include name="org/hibernate/main/hibernate-core-*.Final.jar" />
-			<include name="org/bouncycastle/main/bcprov-*.jar" />
-			<include name="org/codehaus/woodstox/main/*.jar" />
 		</fileset>
 		<!-- Optional project own libraries -->
 		<fileset dir="lib" erroronmissingdir="false">
@@ -201,6 +204,16 @@
 	<!-- Build archives        		    	          					  -->
 	<!-- ================================================================ -->
 
+	<target name="_copy-hbm">
+		<echo>${ant.project.name}: Copying Hibernate mapping files</echo>
+		<copy todir="${basedir}/build/classes/java" overwrite="true">
+			<fileset dir="${conf.dir}/hibernate/mappings" erroronmissingdir="false">
+				<include name="**/*.hbm.xml"/>
+			</fileset>
+		</copy>
+	</target>
+					
+	
 	<target name="_copy-language" if="product.core">
 		<!-- Internal target: Copies language tags to build dir for easier EAR assembly.
 		     Required only for base products, not Tools -->
@@ -229,7 +242,7 @@
 	</target>
 	
 	
-	<target name="_build-jar" depends="_compile-java, _build-manifest, _copy-language">
+	<target name="_build-jar" depends="_compile-java, _copy-hbm, _build-manifest, _copy-language">
 		<!-- Internal target: Creates JAR file. -->
 		<echo>${ant.project.name}: Building JAR</echo>
 		<jar jarfile="${basedir}/build/lib/${product}.jar"
@@ -239,7 +252,7 @@
 	</target>
 
 	
-	<target name="_build-war" depends="_build-manifest, _copy-language, _copy-jsp, _copy-libs">
+	<target name="_build-war" depends="_build-manifest, _copy-language, _copy-jsp, _copy-libs, _copy-deployment-handler">
 		<!-- Internal target: Creates WAR file. -->
 		<echo>${ant.project.name}: Building WAR</echo>
 		
@@ -297,9 +310,6 @@
 			           match="(${moduleActivationPlaceholder})"
 			           replace="${moduleActivationEntry}    \1"
 		/>
-		<setpermissions mode="644" nonPosixMode="pass" failonerror="false">
-			<file file="${server.home}/standalone/deployments/lams.ear/META-INF/application.xml" />
-		</setpermissions>
 	</target>
 
 	<!-- =================================================================== -->
@@ -342,7 +352,7 @@
 	</target>
 	
 	
-	<target name="_copy-jsp" depends="sass.compile">
+	<target name="_copy-jsp" depends="sass.compile, _js-minify">
 		<!-- Internal target: Copies JSP files. -->
 		<echo>${ant.project.name}: Copying JSP files</echo>
 
@@ -363,6 +373,14 @@
 			</fileset>
 	 	</copy>
 	</target>
+	
+	<target name="_copy-deployment-handler">
+		<!-- Internal target: Copies WildFly deployment handler -->
+		<echo>${ant.project.name}: Copying deployment handler</echo>
+
+	 	<copy todir="${basedir}/build/war/META-INF/services"
+	 		  file="../../lams/lams_build/conf/deployment-handler/io.undertow.servlet.ServletExtension" />
+	</target>
 
 	<!-- ====================================================================== -->
 	<!--  Compile scss files to css files. Assumes SASS is installed. See       -->
@@ -371,60 +389,50 @@
 	<!--  sass.compile.auto compiles modified .sccs files. Use for auto builds. -->
 	<!-- ====================================================================== -->
 	<target name="_sass.do.compile">
-		<apply dest="${basedir}/build/css" executable="${sass_exec_file}" failonerror="true" verbose="true">
-			<arg value="--sourcemap=none"/>
-	  		<arg value="--load-path=${scss.common.variables}"/>
-			<srcfile/>
-			<targetfile/>
-			<fileset dir="${scss.css.dir}" erroronmissingdir="false">
-				<include name="*.scss"/>
-		   		<exclude name="_*.scss" />
-	 	  	</fileset>
-	        <mapper from="*.scss" to="*.css" type="glob"/>
-		</apply>
-		<ant target="_css.minify.copy"/>
-			<ant target="_css.nominify.copy"/>
+        <apply dest="${basedir}/build/css" executable="${sass_exec_file}" failonerror="true" verbose="true">
+        	<arg value="--sourcemap=none"/>
+        	<arg value="--load-path=${scss.common.variables}"/>
+            <srcfile/>
+            <targetfile/>
+	        <fileset dir="${scss.css.dir}" erroronmissingdir="false">
+		        <include name="*.scss"/>
+	            <exclude name="_*.scss" />
+ 	        </fileset>
+            <mapper from="*.scss" to="*.css" type="glob"/>
+        </apply>
+	    <ant target="_css.minify.copy"/>
+	    	<ant target="_css.nominify.copy"/>
 	</target>
 	
 	<target name="_css.minify.copy"  if="${css.minify}">
 		<echo> Minifying Files </echo>
-		<apply executable="java" parallel="false">
-			<fileset dir="${basedir}/build/css">
-				<include name="*.css"/>
-				<exclude name="*-min.css"/>
-			</fileset>
-		 	<arg line="-jar"/>
-		  	<arg path="${yuicompressor}"/>
-		  	<srcfile/>
-		  	<arg line="-o"/>
-		  	<mapper type="glob" from="*.css" to="${basedir}/build/css/*-min.css"/>
-		  	<targetfile/>
-		</apply>
-	    	<echo>Copying css files from build area to web/css directory. The .map files are not copied. </echo>
-		<copy todir="${scss.css.dir}">
+	    <apply executable="java" parallel="false">
+	        <fileset dir="${basedir}/build/css">
+		        	<include name="*.css"/>
+		        	<exclude name="*-min.css"/>
+		    </fileset>
+	        <arg line="-jar"/>
+	        <arg path="${yuicompressor}"/>
+	         <srcfile/>
+	        <arg line="-o"/>
+	        <mapper type="glob" from="*.css" to="${basedir}/build/css/*-min.css"/>
+	        <targetfile/>
+	    </apply>
+    		<echo>Copying css files from build area to web/css directory. The .map files are not copied. </echo>
+	 	<copy todir="${scss.css.dir}">
 			<fileset dir="${basedir}/build/css" erroronmissingdir="false">
 				<include name="*.css"/>
 			</fileset>
-			<mapper type="glob" from="*-min.css" to="*.css"/>
-		</copy>
+		    <mapper type="glob" from="*-min.css" to="*.css"/>
+	 	</copy>
 	</target>
-	
-	<target name="_css.nominify.copy" unless="${css.minify}">
-			<echo>Copying css files from build area to web/css directory. The .map files are not copied. </echo>
-		<copy todir="${scss.css.dir}" verbose="true">
-			<fileset dir="${basedir}/build/css" erroronmissingdir="false">
-				<include name="*.css"/>
-			    	<exclude name="*-min.css"/>
-			</fileset>
-			<mapper type="glob" from="*.css" to="*.css"/>
-		</copy>
-	</target>	
 
-	<target name="_css.copy">
+	<target name="_css.nominify.copy" unless="${css.minify}">
     		<echo>Copying css files from build area to web/css directory. The .map files are not copied. </echo>
 	 	<copy todir="${scss.css.dir}" verbose="true">
 			<fileset dir="${basedir}/build/css" erroronmissingdir="false">
 				<include name="*.css"/>
+		        	<exclude name="*-min.css"/>
 			</fileset>
 		    <mapper type="glob" from="*.css" to="*.css"/>
 	 	</copy>
@@ -452,5 +460,34 @@
 		<mkdir dir="${basedir}/build/css" />
 		<ant target="_sass.do.compile"/>
     </target>
+
+	<!-- Minify specific javascript files -->
+	<fileset id="js.to.minify" dir="${basedir}/web/includes/javascript">
+        	<include name="*.js"/>
+    </fileset>
+
+	<target name="_set-do.js.minify">
+		<condition property="do.js.minify">
+	    		<and>
+		      <istrue value="${js.minify}"/>
+		      <available file="${basedir}/web/includes/javascript" type="dir"/>
+		    </and>
+		</condition>
+	</target>
+	
+  	<!-- Must run before the general web copy or the minified files will not be included as the files are up to date. -->
+	<target name="_js-minify" depends="_set-do.js.minify" if="do.js.minify">
+		<echo>Minifying Javascript Files</echo>
+		<mkdir dir="${basedir}/build/war/includes/javascript" />
+	    <apply executable="java" parallel="false">
+	        <fileset refid="js.to.minify"/>
+	        <arg line="-jar"/>
+	        <arg path="${yuicompressor}"/>
+	        <srcfile/>
+	        <arg line="-o"/>
+	        <mapper type="glob" from="*.js" to="${basedir}/build/war/includes/javascript/*.js"/>
+	        <targetfile/>
+	    </apply>
+	</target>
 
 </project>
